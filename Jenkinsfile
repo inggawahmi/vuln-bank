@@ -1,5 +1,5 @@
 pipeline{
-    agent none
+    agent any
     environment {
         DOCKERHUB_CREDENTIALS = credentials('DockerLogin')
         SNYK_CREDENTIALS = credentials('SnykToken')
