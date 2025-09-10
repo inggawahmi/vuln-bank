@@ -99,7 +99,7 @@ pipeline{
             steps {
                 withCredentials([
                     sshUserPrivateKey(credentialsId: "DeploymentSSHKey", keyFileVariable: 'keyfile'),
-                    usernamePassword(credentialsId: "DOCKERHUB_CREDENTIALS", usernameVariable: 'tmpUser', passwordVariable: 'tmpPass')
+                    usernamePassword(credentialsId: "DockerLogin", usernameVariable: 'tmpUser', passwordVariable: 'tmpPass')
                 ]) {
                     // Di sini Jenkins otomatis nyiapin env var default:
                     //   DOCKERHUB_CREDENTIALS_USR → username Docker Hub
