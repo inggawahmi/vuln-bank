@@ -30,21 +30,21 @@ pipeline{
                 sh 'docker-compose build'
             }
         }
-        // stage('SCA Snyk Test'){
-        //     agent {
-        //         docker {
-        //             image 'snyk/snyk:node'
-        //             args '-u root --network host --env SNYK_TOKEN=$SNYK_CREDENTIALS_PSW --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'snyk test --json > snyk-scan-report.json'
-        //         }
-        //         sh 'cat snyk-scan-report.json'
-        //         archiveArtifacts artifacts: 'snyk-scan-report.json'
-        //     }
-        // }
+        stage('SCA Snyk Test'){
+            agent {
+                docker {
+                    image 'snyk/snyk:python'
+                    args '-u root --network host --env SNYK_TOKEN=$SNYK_CREDENTIALS_PSW --entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk test --file=requirements.txt --json > snyk-scan-report.json'
+                }
+                sh 'cat snyk-scan-report.json'
+                archiveArtifacts artifacts: 'snyk-scan-report.json'
+            }
+        }
         // stage('SCA OWASP Dependency Check'){
         //     agent {
         //         docker {
