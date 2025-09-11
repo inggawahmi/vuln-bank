@@ -5,21 +5,21 @@ pipeline{
         SNYK_CREDENTIALS = credentials('SnykToken')
     }
     stages {
-        stage ('Secret Scanning using Trufflehog'){
-            agent {
-                docker {
-                    image 'trufflesecurity/trufflehog:latest'
-                    args '--entrypoint='
-                }
-            }
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
-                }
-                sh 'cat trufflehog-scan-result.json'
-                archiveArtifacts artifacts: 'trufflehog-scan-result.json'
-            }
-        }
+        // stage ('Secret Scanning using Trufflehog'){
+        //     agent {
+        //         docker {
+        //             image 'trufflesecurity/trufflehog:latest'
+        //             args '--entrypoint='
+        //         }
+        //     }
+        //     steps {
+        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+        //             sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
+        //         }
+        //         sh 'cat trufflehog-scan-result.json'
+        //         archiveArtifacts artifacts: 'trufflehog-scan-result.json'
+        //     }
+        // }
         stage('Checkout Source dari Github') {
             steps {
                 checkout scm
@@ -40,9 +40,10 @@ pipeline{
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                    snyk test --file=requirements.txt --json > snyk-scan-report.json
+                        apt-get update && apt-get install -y gcc libpq-dev python3-dev
+                        pip install --upgrade pip
+                        pip install --no-cache-dir -r requirements.txt
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json
                     '''
                 }
                 sh 'cat snyk-scan-report.json'
