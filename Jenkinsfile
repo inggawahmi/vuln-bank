@@ -2,24 +2,24 @@ pipeline{
     agent any
     environment {
         DOCKERHUB_CREDENTIALS = credentials('DockerLogin')
-        SNYK_CREDENTIALS = credentials('SnykToken')
+        // SNYK_CREDENTIALS = credentials('SnykToken')
     }
     stages {
-        // stage ('Secret Scanning using Trufflehog'){
-        //     agent {
-        //         docker {
-        //             image 'trufflesecurity/trufflehog:latest'
-        //             args '--entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
-        //         }
-        //         sh 'cat trufflehog-scan-result.json'
-        //         archiveArtifacts artifacts: 'trufflehog-scan-result.json'
-        //     }
-        // }
+        stage ('Secret Scanning using Trufflehog'){
+            agent {
+                docker {
+                    image 'trufflesecurity/trufflehog:latest'
+                    args '--entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
+                }
+                sh 'cat trufflehog-scan-result.json'
+                archiveArtifacts artifacts: 'trufflehog-scan-result.json'
+            }
+        }
         stage('Checkout Source dari Github') {
             steps {
                 checkout scm
