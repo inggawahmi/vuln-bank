@@ -39,10 +39,9 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                     sh '''
-                            # Install dependency dulu
-                            pip install -r requirements.txt
-                            # Baru jalankan Snyk scan
+                    sh  '''
+                            apt-get update && apt-get install -y gcc libpq-dev python3-dev build-essential
+                            pip install --no-cache-dir -r requirements.txt
                             snyk test --file=requirements.txt --json > snyk-scan-report.json
                         '''
                 }
