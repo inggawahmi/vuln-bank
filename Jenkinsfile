@@ -40,7 +40,7 @@ pipeline{
                 }
             }
             steps {
-                withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
+                withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
                     sh '''
                         snyk auth $SNYK_TOKEN
                         snyk test --file=requirements.txt --json > snyk-scan-report.json
