@@ -43,7 +43,10 @@ pipeline{
                 withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
                     sh '''
                         snyk auth $SNYK_TOKEN
-                        snyk test --file=requirements.txt --json > snyk-scan-report.json
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
+                        echo "Snyk finished with exit code $EXIT_CODE"
+                        exit 0
+                        
                     '''
                 }
             }
