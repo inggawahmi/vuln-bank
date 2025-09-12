@@ -36,7 +36,7 @@ pipeline{
             agent {
                 docker {
                     image 'inggawahmi/snyk-python:3.9'
-                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
                 }
             }
             steps {
@@ -53,7 +53,7 @@ pipeline{
                 }
             }
         }
-        
+
         // stage('SCA OWASP Dependency Check'){
         //     agent {
         //         docker {
