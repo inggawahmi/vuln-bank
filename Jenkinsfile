@@ -39,7 +39,12 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'snyk test --file=requirements.txt --json > snyk-scan-report.json'
+                     sh '''
+                            # Install dependency dulu
+                            pip install -r requirements.txt
+                            # Baru jalankan Snyk scan
+                            snyk test --file=requirements.txt --json > snyk-scan-report.json
+                        '''
                 }
                 sh 'cat snyk-scan-report.json'
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
