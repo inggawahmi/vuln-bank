@@ -39,9 +39,7 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh '
-                        snyk test --file=requirements.txt --json > snyk-scan-report.json
-                    '
+                    sh 'snyk test --file=requirements.txt --json > snyk-scan-report.json'
                 }
                 sh 'cat snyk-scan-report.json'
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
