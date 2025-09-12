@@ -30,42 +30,39 @@ pipeline{
                 sh 'docker-compose build'
             }
         }
-        // stage('SCA Snyk Test'){
-        //     agent {
-        //         docker {
-        //             image 'snyk/snyk:python'
-        //             args '-u root --network host --env SNYK_TOKEN=$SNYK_CREDENTIALS_PSW --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh '''
-        //                 apt-get update && apt-get install -y gcc libpq-dev python3-dev
-        //                 pip install --upgrade pip
-        //                 pip install --no-cache-dir -r requirements.txt
-        //                 snyk test --file=requirements.txt --json > snyk-scan-report.json
-        //             '''
-        //         }
-        //         sh 'cat snyk-scan-report.json'
-        //         archiveArtifacts artifacts: 'snyk-scan-report.json'
-        //     }
-        // }
-        stage('SCA OWASP Dependency Check'){
+        stage('SCA Snyk Test'){
             agent {
                 docker {
-                    image 'owasp/dependency-check:latest'
-                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
+                    image 'snyk/snyk:python'
+                    args '-u root --network host --env SNYK_TOKEN=$SNYK_CREDENTIALS_PSW --entrypoint='
                 }
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh '/usr/share/dependency-check/bin/dependency-check.sh --scan . --project "Vuln-bank" --format ALL --noupdate'
+                    sh '
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json
+                    '
                 }
-                archiveArtifacts artifacts: 'dependency-check-report.html'
-                archiveArtifacts artifacts: 'dependency-check-report.json'
-                archiveArtifacts artifacts: 'dependency-check-report.xml'
+                sh 'cat snyk-scan-report.json'
+                archiveArtifacts artifacts: 'snyk-scan-report.json'
             }
         }
+        // stage('SCA OWASP Dependency Check'){
+        //     agent {
+        //         docker {
+        //             image 'owasp/dependency-check:latest'
+        //             args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
+        //         }
+        //     }
+        //     steps {
+        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+        //             sh '/usr/share/dependency-check/bin/dependency-check.sh --scan . --project "Vuln-bank" --format ALL --noupdate'
+        //         }
+        //         archiveArtifacts artifacts: 'dependency-check-report.html'
+        //         archiveArtifacts artifacts: 'dependency-check-report.json'
+        //         archiveArtifacts artifacts: 'dependency-check-report.xml'
+        //     }
+        // }
         // stage('SCA Trivy scan Dockerfile Misconfiguration') {
         //     agent {
         //         docker {
