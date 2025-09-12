@@ -25,30 +25,35 @@ pipeline{
                 checkout scm
             }
         }
+
         stage('Build') {
             steps {
                 sh 'docker-compose build'
             }
         }
-        stage('SCA Snyk Test'){
+
+        stage('SCA Scan with Snyk') {
             agent {
                 docker {
-                    image 'snyk/snyk:python'
-                    args '-u root --network host --env SNYK_TOKEN=$SNYK_CREDENTIALS_PSW --entrypoint='
+                    image 'inggawahmi/snyk-python:3.9'
+                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh  '''
-                            apt-get update && apt-get install -y gcc libpq-dev python3-dev build-essential
-                            pip install --no-cache-dir -r requirements.txt
-                            snyk test --file=requirements.txt --json > snyk-scan-report.json
-                        '''
+                withCredentials([string(credentialsId: 'SnykToken', variable: 'SNYK_TOKEN')]) {
+                    sh '''
+                        snyk auth $SNYK_TOKEN
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json
+                    '''
                 }
-                sh 'cat snyk-scan-report.json'
-                archiveArtifacts artifacts: 'snyk-scan-report.json'
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'snyk-scan-report.json'
+                }
             }
         }
+        
         // stage('SCA OWASP Dependency Check'){
         //     agent {
         //         docker {
