@@ -32,30 +32,50 @@ pipeline{
             }
         }
 
-        stage('SCA Scan with Snyk') {
+        // ======= NEW: SAST Stage (Semgrep) =======
+        stage('SAST Scan with Semgrep') {
             agent {
                 docker {
-                    image 'inggawahmi/snyk-python:3.9'
-                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
+                    image 'returntocorp/semgrep:stable'
+                    args '--user root --entrypoint='
                 }
             }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
-                    sh '''
-                        snyk auth $SNYK_TOKEN
-                        snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
-                        echo "Snyk finished with exit code $EXIT_CODE"
-                        exit 0
-                        
-                    '''
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    // Gunakan konfigurasi otomatis semgrep; output JSON untuk di-archive
+                    // Tambahkan timeout agar proses tidak berjalan selamanya
+                    sh 'semgrep --config=auto --timeout 120 --json > semgrep-report.json || true'
                 }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'snyk-scan-report.json'
-                }
+                sh 'cat semgrep-report.json || true'
+                archiveArtifacts artifacts: 'semgrep-report.json'
             }
         }
+
+
+        // stage('SCA Scan with Snyk') {
+        //     agent {
+        //         docker {
+        //             image 'inggawahmi/snyk-python:3.9'
+        //             args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
+        //         }
+        //     }
+        //     steps {
+        //         withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
+        //             sh '''
+        //                 snyk auth $SNYK_TOKEN
+        //                 snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
+        //                 echo "Snyk finished with exit code $EXIT_CODE"
+        //                 exit 0
+
+        //             '''
+        //         }
+        //     }
+        //     post {
+        //         always {
+        //             archiveArtifacts artifacts: 'snyk-scan-report.json'
+        //         }
+        //     }
+        // }
 
         // stage('SCA OWASP Dependency Check'){
         //     agent {
@@ -73,21 +93,22 @@ pipeline{
         //         archiveArtifacts artifacts: 'dependency-check-report.xml'
         //     }
         // }
-        // stage('SCA Trivy scan Dockerfile Misconfiguration') {
-        //     agent {
-        //         docker {
-        //             image 'aquasec/trivy:latest'
-        //             args '-u root --network host --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'trivy config Dockerfile --exit-code=1 --format json > trivy-scan-dockerfile-report.json'
-        //         }
-        //         sh 'cat trivy-scan-dockerfile-report.json'
-        //         archiveArtifacts artifacts: 'trivy-scan-dockerfile-report.json'
-        //     }
-        // }
+        
+        stage('SCA Trivy scan Dockerfile Misconfiguration') {
+            agent {
+                docker {
+                    image 'aquasec/trivy:latest'
+                    args '-u root --network host --entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'trivy config Dockerfile --exit-code=1 --format json > trivy-scan-dockerfile-report.json'
+                }
+                sh 'cat trivy-scan-dockerfile-report.json'
+                archiveArtifacts artifacts: 'trivy-scan-dockerfile-report.json'
+            }
+        }
         stage('Build Docker Image and Push to Docker Registry') {
             agent {
                 docker {
