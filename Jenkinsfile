@@ -95,7 +95,7 @@ pipeline{
             agent {
                 docker {
                     image 'sonarsource/sonar-scanner-cli:latest'
-                    args '--network host -v ".:/usr/src" --entrypoint='
+                    args '--network host -v ${WORKSPACE}:/usr/src --entrypoint='
                 }
             }
             steps {
