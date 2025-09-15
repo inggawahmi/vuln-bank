@@ -3,6 +3,7 @@ pipeline{
     environment {
         DOCKERHUB_CREDENTIALS = credentials('DockerLogin')
         SNYK_CREDENTIALS = credentials('SnykToken')
+        SONARQUBE_CREDENTIALS = credentials('SonarToken')
     }
     stages {
         // stage ('Secret Scanning using Trufflehog'){
@@ -31,26 +32,6 @@ pipeline{
                 sh 'docker-compose build'
             }
         }
-
-        // ======= NEW: SAST Stage (Semgrep) =======
-        stage('SAST Scan with Semgrep') {
-            agent {
-                docker {
-                    image 'returntocorp/semgrep:stable'
-                    args '--user root --entrypoint='
-                }
-            }
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    // Gunakan konfigurasi otomatis semgrep; output JSON untuk di-archive
-                    // Tambahkan timeout agar proses tidak berjalan selamanya
-                    sh 'semgrep --config=auto --timeout 120 --json > semgrep-report.json || true'
-                }
-                sh 'cat semgrep-report.json || true'
-                archiveArtifacts artifacts: 'semgrep-report.json'
-            }
-        }
-
 
         // stage('SCA Scan with Snyk') {
         //     agent {
@@ -94,21 +75,50 @@ pipeline{
         //     }
         // }
         
-        stage('SCA Trivy scan Dockerfile Misconfiguration') {
+        // stage('SCA Trivy scan Dockerfile Misconfiguration') {
+        //     agent {
+        //         docker {
+        //             image 'aquasec/trivy:latest'
+        //             args '-u root --network host --entrypoint='
+        //         }
+        //     }
+        //     steps {
+        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+        //             sh 'mkdir -p .json && trivy config Dockerfile --exit-code=1 --format json > .json/trivy-scan-dockerfile-report.json'
+        //         }
+        //         sh 'cat .json/trivy-scan-dockerfile-report.json'
+        //         archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
+        //     }
+        // }
+
+        stage('SAST Scan with SonarQube') {
             agent {
                 docker {
-                    image 'aquasec/trivy:latest'
-                    args '-u root --network host --entrypoint='
+                    image 'sonarsource/sonar-scanner-cli:latest'
+                    args '--network host -v ".:/usr/src" --entrypoint='
                 }
             }
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trivy config Dockerfile --exit-code=1 --format json > trivy-scan-dockerfile-report.json'
+                // Ambil token Sonar dari credentials (harapkan berupa secret text)
+                withCredentials([string(credentialsId: 'SonarToken', variable: 'SONAR_TOKEN')]) {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        sh '''
+                            SONAR_HOST_URL=${SONAR_HOST_URL:-http://192.168.1.7:9000}
+                            sonar-scanner \
+                              -Dsonar.projectKey=vuln-bank \
+                              -Dsonar.qualitygate.wait=true \
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=$SONAR_HOST_URL \
+                              -Dsonar.login=$SONAR_TOKEN \
+                              -Dsonar.sourceEncoding=UTF-8 2>&1 | tee sonar-scan.json || true
+                        '''
+                    }
                 }
-                sh 'cat trivy-scan-dockerfile-report.json'
-                archiveArtifacts artifacts: 'trivy-scan-dockerfile-report.json'
+                sh 'cat sonar-scan.json || true'
+                archiveArtifacts artifacts: 'sonar-scan.json'
             }
         }
+
         stage('Build Docker Image and Push to Docker Registry') {
             agent {
                 docker {
