@@ -100,7 +100,7 @@ pipeline{
             }
             steps {
                 // Ambil token Sonar dari credentials (harapkan berupa secret text)
-                withCredentials([string(credentialsId: 'SonarToken', variable: 'SONAR_TOKEN')]) {
+                withCredentials([usernamePassword(credentialsId: 'SonarToken', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_TOKEN')]) {
                     catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                         sh '''
                             SONAR_HOST_URL=${SONAR_HOST_URL:-http://192.168.1.7:9000}
