@@ -95,7 +95,7 @@ pipeline{
             agent {
                 docker {
                     image 'sonarsource/sonar-scanner-cli:latest'
-                    args '--network host -v ${WORKSPACE}:/usr/src --entrypoint='
+                    args '--network host -v ".:/usr/src" --entrypoint='
                 }
             }
             steps {
@@ -108,6 +108,8 @@ pipeline{
                               -Dsonar.projectKey=vuln-bank \
                               -Dsonar.qualitygate.wait=true \
                               -Dsonar.sources=/usr/src \
+                              -Dsonar.language=py \
+                              -Dsonar.inclusions=**/*.py \
                               -Dsonar.host.url=$SONAR_HOST_URL \
                               -Dsonar.token=$SONAR_TOKEN \
                               -Dsonar.sourceEncoding=UTF-8 2>&1 | tee sonar-scan.json || true
