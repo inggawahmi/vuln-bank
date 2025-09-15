@@ -94,30 +94,17 @@ pipeline{
         stage('SAST Scan with SonarQube') {
             agent {
                 docker {
-                    image 'sonarsource/sonar-scanner-cli:latest'
-                    args '--network host -v ${WORKSPACE}:/usr/src --entrypoint='
+                    image 'snyk/snyk:python'
+                    args '--u root --network host --env SNYK_TOKEN=SNYK-CREDENTIALS_PSW --entrypoint='
                 }
             }
             steps {
-                // Ambil token Sonar dari credentials (harapkan berupa secret text)
-                withCredentials([usernamePassword(credentialsId: 'SonarToken', usernameVariable: 'SONAR_USER', passwordVariable: 'SONAR_TOKEN')]) {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                        sh '''
-                            SONAR_HOST_URL=${SONAR_HOST_URL:-http://192.168.1.7:9000}
-                            sonar-scanner \
-                              -Dsonar.projectKey=vuln-bank \
-                              -Dsonar.qualitygate.wait=true \
-                              -Dsonar.sources=/usr/src \
-                              -Dsonar.language=py \
-                              -Dsonar.inclusions=**/*.py \
-                              -Dsonar.host.url=$SONAR_HOST_URL \
-                              -Dsonar.token=$SONAR_TOKEN \
-                              -Dsonar.sourceEncoding=UTF-8 2>&1 | tee sonar-scan.json || true
-                        '''
-                    }
+                
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'snyk code test --json > .json/snyk-scan-code-report.json'
                 }
-                sh 'cat sonar-scan.json || true'
-                archiveArtifacts artifacts: 'sonar-scan.json'
+                sh 'cat snyk-scan-code-report.json'
+                archiveArtifacts artifacts: '.json/snyk-scan-code-report.json'
             }
         }
 
