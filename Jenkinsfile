@@ -107,9 +107,9 @@ pipeline{
                             sonar-scanner \
                               -Dsonar.projectKey=vuln-bank \
                               -Dsonar.qualitygate.wait=true \
-                              -Dsonar.sources=usr/src \
+                              -Dsonar.sources=/usr/src \
                               -Dsonar.host.url=$SONAR_HOST_URL \
-                              -Dsonar.login=$SONAR_TOKEN \
+                              -Dsonar.token=$SONAR_TOKEN \
                               -Dsonar.sourceEncoding=UTF-8 2>&1 | tee sonar-scan.json || true
                         '''
                     }
