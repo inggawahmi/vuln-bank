@@ -91,20 +91,25 @@ pipeline{
         //     }
         // }
 
-        stage('SAST Scan with SonarQube') {
+        stage('SAST Scan with Snyk (Python)') {
             agent {
                 docker {
                     image 'snyk/snyk:python'
-                    args '--u root --network host --env SNYK_TOKEN=SNYK-CREDENTIALS_PSW --entrypoint='
+                    args '--user root --network host --entrypoint='
                 }
             }
+            environment {
+                SNYK_CREDS = credentials('SnykToken')
+            }
             steps {
-                
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'snyk code test --json > .json/snyk-scan-code-report.json'
+                    sh '''
+                        snyk auth "$SNYK_CREDS_PSW"
+                        snyk code test --json > snyk-scan-code-report.json
+                    '''
                 }
                 sh 'cat snyk-scan-code-report.json'
-                archiveArtifacts artifacts: '.json/snyk-scan-code-report.json'
+                archiveArtifacts artifacts: 'snyk-scan-code-report.json'
             }
         }
 
