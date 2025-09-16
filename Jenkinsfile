@@ -185,7 +185,7 @@ pipeline{
             agent {
                 docker {
                     image 'ghcr.io/zaproxy/zaproxy:stable'
-                    args '-u root --network host -v /var/run/docker.sock:/var/run.docker.sock --entrypoint= -v ${env.WORKSPACE}:/zap/wrk/:rw'
+                    args '-u root --network host -v /var/run/docker.sock:/var/run.docker.sock --entrypoint= -v ${WORKSPACE}:/zap/wrk/:rw'
                 }
             }
             steps {
