@@ -166,7 +166,7 @@ pipeline{
             agent {
                 docker {
                     image 'projectdiscovery/nuclei'
-                    args '--user root --network --entrypoint='
+                    args '--user root --network host --entrypoint='
                 }
             }
             options {
