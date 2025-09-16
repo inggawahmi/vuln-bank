@@ -6,21 +6,23 @@ pipeline{
         SONARQUBE_CREDENTIALS = credentials('SonarToken')
     }
     stages {
-        // stage ('Secret Scanning using Trufflehog'){
-        //     agent {
-        //         docker {
-        //             image 'trufflesecurity/trufflehog:latest'
-        //             args '--entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
-        //         }
-        //         sh 'cat trufflehog-scan-result.json'
-        //         archiveArtifacts artifacts: 'trufflehog-scan-result.json'
-        //     }
-        // }
+
+        stage ('Secret Scanning using Trufflehog'){
+            agent {
+                docker {
+                    image 'trufflesecurity/trufflehog:latest'
+                    args '--entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
+                }
+                sh 'cat trufflehog-scan-result.json'
+                archiveArtifacts artifacts: 'trufflehog-scan-result.json'
+            }
+        }
+
         stage('Checkout Source dari Github') {
             steps {
                 checkout scm
@@ -33,85 +35,68 @@ pipeline{
             }
         }
 
-        // stage('SCA Scan with Snyk') {
-        //     agent {
-        //         docker {
-        //             image 'inggawahmi/snyk-python:3.9'
-        //             args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
-        //             sh '''
-        //                 snyk auth $SNYK_TOKEN
-        //                 snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
-        //                 echo "Snyk finished with exit code $EXIT_CODE"
-        //                 exit 0
+        stage('SCA Scan with Snyk') {
+            agent {
+                docker {
+                    image 'inggawahmi/snyk-python:3.9'
+                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
+                    sh '''
+                        snyk auth $SNYK_TOKEN
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
+                        echo "Snyk finished with exit code $EXIT_CODE"
+                        exit 0
 
-        //             '''
-        //         }
-        //     }
-        //     post {
-        //         always {
-        //             archiveArtifacts artifacts: 'snyk-scan-report.json'
-        //         }
-        //     }
-        // }
-
-        // stage('SCA OWASP Dependency Check'){
-        //     agent {
-        //         docker {
-        //             image 'owasp/dependency-check:latest'
-        //             args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh '/usr/share/dependency-check/bin/dependency-check.sh --scan . --project "Vuln-bank" --format ALL --noupdate'
-        //         }
-        //         archiveArtifacts artifacts: 'dependency-check-report.html'
-        //         archiveArtifacts artifacts: 'dependency-check-report.json'
-        //         archiveArtifacts artifacts: 'dependency-check-report.xml'
-        //     }
-        // }
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'snyk-scan-report.json'
+                }
+            }
+        }
         
-        // stage('SCA Trivy scan Dockerfile Misconfiguration') {
-        //     agent {
-        //         docker {
-        //             image 'aquasec/trivy:latest'
-        //             args '-u root --network host --entrypoint='
-        //         }
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'mkdir -p .json && trivy config Dockerfile --exit-code=1 --format json > .json/trivy-scan-dockerfile-report.json'
-        //         }
-        //         sh 'cat .json/trivy-scan-dockerfile-report.json'
-        //         archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
-        //     }
-        // }
+        stage('SCA Trivy scan Dockerfile Misconfiguration') {
+            agent {
+                docker {
+                    image 'aquasec/trivy:latest'
+                    args '-u root --network host --entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'mkdir -p .json && trivy config Dockerfile --exit-code=1 --format json > .json/trivy-scan-dockerfile-report.json'
+                }
+                sh 'cat .json/trivy-scan-dockerfile-report.json'
+                archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
+            }
+        }
 
-        // stage('SAST Scan with Snyk') {
-        //     agent {
-        //         docker {
-        //             image 'snyk/snyk:python'
-        //             args '--user root --network host --entrypoint='
-        //         }
-        //     }
-        //     environment {
-        //         SNYK_CREDS = credentials('SnykToken')
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh '''
-        //                 snyk auth "$SNYK_CREDS_PSW"
-        //                 snyk code test --json > snyk-scan-code-report.json
-        //             '''
-        //         }
-        //         sh 'cat snyk-scan-code-report.json'
-        //         archiveArtifacts artifacts: 'snyk-scan-code-report.json'
-        //     }
-        // }
+        stage('SAST Scan with Snyk') {
+            agent {
+                docker {
+                    image 'snyk/snyk:python'
+                    args '--user root --network host --entrypoint='
+                }
+            }
+            environment {
+                SNYK_CREDS = credentials('SnykToken')
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh '''
+                        snyk auth "$SNYK_CREDS_PSW"
+                        snyk code test --json > snyk-scan-code-report.json
+                    '''
+                }
+                sh 'cat snyk-scan-code-report.json'
+                archiveArtifacts artifacts: 'snyk-scan-code-report.json'
+            }
+        }
 
         stage('Build Docker Image and Push to Docker Registry') {
             agent {
@@ -139,11 +124,7 @@ pipeline{
                     sshUserPrivateKey(credentialsId: "DeploymentSSHKey", keyFileVariable: 'keyfile'),
                     usernamePassword(credentialsId: "DockerLogin", usernameVariable: 'tmpUser', passwordVariable: 'tmpPass')
                 ]) {
-                    // Di sini Jenkins otomatis nyiapin env var default:
-                    //   DOCKERHUB_CREDENTIALS_USR → username Docker Hub
-                    //   DOCKERHUB_CREDENTIALS_PSW → password Docker Hub
-
-                    // 1. Login Docker Hub di remote server
+                    // 1. Login ke Docker Hub
                     sh '''
                         ssh -i ${keyfile} -o StrictHostKeyChecking=no deploymentserver@192.168.1.11 \
                         "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
@@ -161,25 +142,6 @@ pipeline{
                 }
             }
         }
-
-        // stage('DAST scan with nuclei') {
-        //     agent {
-        //         docker {
-        //             image 'projectdiscovery/nuclei'
-        //             args '--user root --network host --entrypoint='
-        //         }
-        //     }
-        //     options {
-        //         timeout(time: 30, unit: 'MINUTES')
-        //     }
-        //     steps {
-        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-        //             sh 'nuclei -u http://192.168.1.11:5000 -severity critical,high -j > nuclei-scan-report.json'
-        //             sh 'cat nuclei-scan-report.json'
-        //         }
-        //         archiveArtifacts artifacts: 'nuclei-scan-report.json'
-        //     }
-        // }
 
         stage('DAST scan with OWASP ZAP') {
             agent {
