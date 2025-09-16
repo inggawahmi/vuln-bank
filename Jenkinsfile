@@ -174,7 +174,7 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'nuclei -u http://192.168.1.11:5000 -nc -j > nuclei-scan-report.json'
+                    sh 'nuclei -u http://192.168.1.11:5000 -severity critical,high -j > nuclei-scan-report.json'
                     sh 'cat nuclei-scan-report.json'
                 }
                 archiveArtifacts artifacts: 'nuclei-scan-report.json'
