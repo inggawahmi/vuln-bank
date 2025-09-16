@@ -162,22 +162,40 @@ pipeline{
             }
         }
 
-        stage('DAST scan with nuclei') {
+        // stage('DAST scan with nuclei') {
+        //     agent {
+        //         docker {
+        //             image 'projectdiscovery/nuclei'
+        //             args '--user root --network host --entrypoint='
+        //         }
+        //     }
+        //     options {
+        //         timeout(time: 30, unit: 'MINUTES')
+        //     }
+        //     steps {
+        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+        //             sh 'nuclei -u http://192.168.1.11:5000 -severity critical,high -j > nuclei-scan-report.json'
+        //             sh 'cat nuclei-scan-report.json'
+        //         }
+        //         archiveArtifacts artifacts: 'nuclei-scan-report.json'
+        //     }
+        // }
+
+        stage('DAST scan with OWASP ZAP') {
             agent {
                 docker {
-                    image 'projectdiscovery/nuclei'
-                    args '--user root --network host --entrypoint='
+                    image 'ghcr.io/zaproxy/zaproxy:stable'
+                    args '-u root --network host -v /var/run/docker.sock:/var/run.docker.sock --entrypoint= -v .:/zap/wrk/:rw'
                 }
-            }
-            options {
-                timeout(time: 30, unit: 'MINUTES')
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'nuclei -u http://192.168.1.11:5000 -severity critical,high -j > nuclei-scan-report.json'
-                    sh 'cat nuclei-scan-report.json'
+                    sh 'zap-baseline.py -t http://192.168.1.11:5000 -r zapbaseline.html -x zap_report.xml'
                 }
-                archiveArtifacts artifacts: 'nuclei-scan-report.json'
+                sh 'cp /zap/wrk/zapbaseline.html ./zapbaseline.html'
+                sh 'cp /zap/wrk/zap_report.xml ./zap_report.xml'
+                archiveArtifacts artifacts: 'zapbaseline.html'
+                archiveArtifacts artifacts: 'zap_report.xml'
             }
         }
     }
