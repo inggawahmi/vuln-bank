@@ -91,27 +91,27 @@ pipeline{
         //     }
         // }
 
-        stage('SAST Scan with Snyk (Python)') {
-            agent {
-                docker {
-                    image 'snyk/snyk:python'
-                    args '--user root --network host --entrypoint='
-                }
-            }
-            environment {
-                SNYK_CREDS = credentials('SnykToken')
-            }
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh '''
-                        snyk auth "$SNYK_CREDS_PSW"
-                        snyk code test --json > snyk-scan-code-report.json
-                    '''
-                }
-                sh 'cat snyk-scan-code-report.json'
-                archiveArtifacts artifacts: 'snyk-scan-code-report.json'
-            }
-        }
+        // stage('SAST Scan with Snyk') {
+        //     agent {
+        //         docker {
+        //             image 'snyk/snyk:python'
+        //             args '--user root --network host --entrypoint='
+        //         }
+        //     }
+        //     environment {
+        //         SNYK_CREDS = credentials('SnykToken')
+        //     }
+        //     steps {
+        //         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+        //             sh '''
+        //                 snyk auth "$SNYK_CREDS_PSW"
+        //                 snyk code test --json > snyk-scan-code-report.json
+        //             '''
+        //         }
+        //         sh 'cat snyk-scan-code-report.json'
+        //         archiveArtifacts artifacts: 'snyk-scan-code-report.json'
+        //     }
+        // }
 
         stage('Build Docker Image and Push to Docker Registry') {
             agent {
@@ -126,6 +126,7 @@ pipeline{
                 sh 'docker push inggawahmi/vuln-bank:0.1'
             }
         }
+
         stage('Deploy Docker Image') {
             agent {
                 docker {
@@ -158,6 +159,22 @@ pipeline{
                         "docker compose -f /home/deploymentserver/vuln-bank/docker-compose.yml up -d"
                     '''
                 }
+            }
+        }
+
+        stage('DAST scan with nuclei') {
+            agent {
+                docker {
+                    image 'projectdiscovery/nuclei'
+                    args '--user root --network host --entrypoint='
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh 'nuclei -u http://192.168.1.11:5000 -nc -j > nuclei-scan-report.json'
+                    sh 'cat nuclei-scan-report.json'
+                }
+                archiveArtifacts artifacts: 'nuclei-scan-report.json'
             }
         }
     }
