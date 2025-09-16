@@ -166,8 +166,11 @@ pipeline{
             agent {
                 docker {
                     image 'projectdiscovery/nuclei'
-                    args '--user root --network host --entrypoint='
+                    args '--user root --network --entrypoint='
                 }
+            }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
