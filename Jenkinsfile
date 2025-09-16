@@ -117,7 +117,7 @@ pipeline{
             agent {
                 docker {
                     image 'docker:dind'
-                    args '--entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock -e HOME=/tmp'
+                    args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
                 }
             }
             steps {
