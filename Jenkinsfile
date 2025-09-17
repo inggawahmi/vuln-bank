@@ -239,7 +239,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                        docker run --rm --network host \
+                        docker run --rm --user root --network host \
                             -v ${WORKSPACE}:/zap/wrk:rw \
                             ghcr.io/zaproxy/zaproxy:stable \
                             zap-baseline.py -t http://192.168.1.11:5000 \
