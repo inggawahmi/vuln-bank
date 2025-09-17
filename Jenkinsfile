@@ -16,7 +16,7 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
                 }
                 sh 'cat trufflehog-scan-result.json'
                 archiveArtifacts artifacts: 'trufflehog-scan-result.json'
@@ -56,6 +56,33 @@ pipeline{
             post {
                 always {
                     archiveArtifacts artifacts: 'snyk-scan-report.json'
+                    withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
+                        script {
+                            if (fileExists('snyk-scan-report.json')) {
+                                def json = new groovy.json.JsonSlurper().parse(new File('snyk-scan-report.json'))
+                                def findings = []
+                                if (json.vulnerabilities) {
+                                    findings = json.vulnerabilities.findAll { it.severity?.toLowerCase() == 'critical' }.collect {
+                                        [title: it.title ?: it.id ?: 'unknown', severity: it.severity]
+                                    }
+                                }
+                                if (findings) {
+                                    def summary = findings.take(5).collect { "- ${it.title} (${it.severity})" }.join("\n")
+                                    def payload = [
+                                        username: "Jenkins Security Bot",
+                                        embeds: [[
+                                            title: "Snyk SCA — Critical Findings",
+                                            description: "Job: `${env.JOB_NAME}`\nBuild: #${env.BUILD_NUMBER}\n\n${summary}",
+                                            url: env.BUILD_URL ?: "",
+                                            color: 16711680
+                                        ]]
+                                    ]
+                                    writeFile file: "discord_snyk_sca.json", text: groovy.json.JsonOutput.toJson(payload)
+                                    sh "curl -s -H 'Content-Type: application/json' -X POST -d @discord_snyk_sca.json '${DISCORD_WEBHOOK}' || true"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
