@@ -1,4 +1,52 @@
-pipeline{
+// === Fungsi global buat notifikasi Discord ===
+def notifyDiscordIfCritical(reportFile, toolName) {
+    if (fileExists(reportFile)) {
+        if (reportFile.endsWith(".json")) {
+            def report = readJSON file: reportFile
+            def hasCritical = false
+
+            // --- Parsing sesuai tool ---
+            if (toolName == "Snyk SCA") {
+                hasCritical = report.vulnerabilities?.any { it.severity == "critical" }
+            } 
+            else if (toolName == "Snyk SAST") {
+                hasCritical = report.issues?.any { it.severity == "critical" }
+            } 
+            else if (toolName == "Trivy") {
+                hasCritical = report.Results?.any { r ->
+                    r.Misconfigurations?.any { m -> m.Severity == "CRITICAL" }
+                }
+            }
+
+            if (hasCritical) {
+                withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
+                    sh """
+                        curl -H 'Content-Type: application/json' \
+                             -X POST \
+                             -d '{\"content\":\":rotating_light: *CRITICAL vulnerability found in ${toolName}!*\"}' \
+                             $DISCORD_WEBHOOK
+                    """
+                }
+            }
+        } 
+        else if (reportFile.endsWith(".xml")) {
+            // ZAP hasil XML → cek string High / Critical
+            def zapReport = readFile file: reportFile
+            if (zapReport.contains("High") || zapReport.contains("Critical")) {
+                withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
+                    sh """
+                        curl -H 'Content-Type: application/json' \
+                             -X POST \
+                             -d '{\"content\":\":rotating_light: *CRITICAL vulnerability found in ${toolName}!*\"}' \
+                             $DISCORD_WEBHOOK
+                    """
+                }
+            }
+        }
+    }
+}
+
+pipeline {
     agent any
     environment {
         DOCKERHUB_CREDENTIALS = credentials('DockerLogin')
@@ -16,7 +64,7 @@ pipeline{
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
                 }
                 sh 'cat trufflehog-scan-result.json'
                 archiveArtifacts artifacts: 'trufflehog-scan-result.json'
@@ -49,39 +97,14 @@ pipeline{
                         snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
                         echo "Snyk finished with exit code $EXIT_CODE"
                         exit 0
-
                     '''
                 }
             }
             post {
                 always {
                     archiveArtifacts artifacts: 'snyk-scan-report.json'
-                    withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
-                        script {
-                            if (fileExists('snyk-scan-report.json')) {
-                                def json = new groovy.json.JsonSlurper().parse(new File('snyk-scan-report.json'))
-                                def findings = []
-                                if (json.vulnerabilities) {
-                                    findings = json.vulnerabilities.findAll { it.severity?.toLowerCase() == 'critical' }.collect {
-                                        [title: it.title ?: it.id ?: 'unknown', severity: it.severity]
-                                    }
-                                }
-                                if (findings) {
-                                    def summary = findings.take(5).collect { "- ${it.title} (${it.severity})" }.join("\n")
-                                    def payload = [
-                                        username: "Jenkins Security Bot",
-                                        embeds: [[
-                                            title: "Snyk SCA — Critical Findings",
-                                            description: "Job: `${env.JOB_NAME}`\nBuild: #${env.BUILD_NUMBER}\n\n${summary}",
-                                            url: env.BUILD_URL ?: "",
-                                            color: 16711680
-                                        ]]
-                                    ]
-                                    writeFile file: "discord_snyk_sca.json", text: groovy.json.JsonOutput.toJson(payload)
-                                    sh "curl -s -H 'Content-Type: application/json' -X POST -d @discord_snyk_sca.json '${DISCORD_WEBHOOK}' || true"
-                                }
-                            }
-                        }
+                    script {
+                        notifyDiscordIfCritical('snyk-scan-report.json', 'Snyk SCA')
                     }
                 }
             }
@@ -100,6 +123,13 @@ pipeline{
                 }
                 sh 'cat .json/trivy-scan-dockerfile-report.json'
                 archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
+            }
+            post {
+                always {
+                    script {
+                        notifyDiscordIfCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
+                    }
+                }
             }
         }
 
@@ -122,6 +152,13 @@ pipeline{
                 }
                 sh 'cat snyk-scan-code-report.json'
                 archiveArtifacts artifacts: 'snyk-scan-code-report.json'
+            }
+            post {
+                always {
+                    script {
+                        notifyDiscordIfCritical('snyk-scan-code-report.json', 'Snyk SAST')
+                    }
+                }
             }
         }
 
@@ -185,6 +222,13 @@ pipeline{
                 sh 'cp /zap/wrk/zap_report.xml ./zap_report.xml'
                 archiveArtifacts artifacts: 'zapbaseline.html'
                 archiveArtifacts artifacts: 'zap_report.xml'
+            }
+            post {
+                always {
+                    script {
+                        notifyDiscordIfCritical('zap_report.xml', 'OWASP ZAP')
+                    }
+                }
             }
         }
     }
