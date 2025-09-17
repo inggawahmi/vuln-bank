@@ -235,18 +235,20 @@ pipeline {
         }
 
         stage('DAST scan with OWASP ZAP') {
-            agent {
-                docker {
-                    image 'ghcr.io/zaproxy/zaproxy:stable'
-                    args '-u root --network host -v /var/run/docker.sock:/var/run.docker.sock --entrypoint= -v ${WORKSPACE}:/zap/wrk/:rw'
-                }
-            }
+            agent any
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'zap-baseline.py -t http://192.168.1.11:5000 -r zapbaseline.html -x zap_report.xml'
+                    sh '''
+                        docker run --rm --network host \
+                            -v ${WORKSPACE}:/zap/wrk:rw \
+                            ghcr.io/zaproxy/zaproxy:stable \
+                            zap-baseline.py -t http://192.168.1.11:5000 \
+                                            -r zapbaseline.html \
+                                            -x zap_report.xml
+                    '''
                 }
-                sh 'cp /zap/wrk/zapbaseline.html ./zapbaseline.html'
-                sh 'cp /zap/wrk/zap_report.xml ./zap_report.xml'
+                sh 'cp zapbaseline.html ./zapbaseline.html'
+                sh 'cp zap_report.xml ./zap_report.xml'
                 archiveArtifacts artifacts: 'zapbaseline.html'
                 archiveArtifacts artifacts: 'zap_report.xml'
             }
