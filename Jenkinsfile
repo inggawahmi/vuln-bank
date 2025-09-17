@@ -1,50 +1,76 @@
 // === Fungsi global buat notifikasi Discord ===
-def notifyDiscordIfCritical(reportFile, toolName) {
-    if (fileExists(reportFile)) {
-        if (reportFile.endsWith(".json")) {
-            def report = readJSON file: reportFile
-            def hasCritical = false
+def notifyDiscordIfHighOrCritical(reportFile, toolName) {
+    if (!fileExists(reportFile)) {
+        echo "[NOTIFY] ${toolName}: report ${reportFile} not found"
+        return
+    }
 
-            // --- Parsing sesuai tool ---
-            if (toolName == "Snyk SCA") {
-                hasCritical = report.vulnerabilities?.any { it.severity == "critical" }
-            } 
-            else if (toolName == "Snyk SAST") {
-                hasCritical = report.issues?.any { it.severity == "critical" }
-            } 
-            else if (toolName == "Trivy") {
-                hasCritical = report.Results?.any { r ->
-                    r.Misconfigurations?.any { m -> m.Severity == "CRITICAL" }
-                }
-            }
+    def findings = []
 
-            if (hasCritical) {
-                withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
-                    sh """
-                        curl -H 'Content-Type: application/json' \
-                             -X POST \
-                             -d '{\"content\":\":rotating_light: *CRITICAL vulnerability found in ${toolName}!*\"}' \
-                             $DISCORD_WEBHOOK
-                    """
-                }
+    if (reportFile.endsWith(".json")) {
+        def report = readJSON file: reportFile
+
+        if (toolName == "Snyk SCA") {
+            findings = report.vulnerabilities?.findAll { v ->
+                v.severity?.toLowerCase() in ["critical", "high"]
+            }?.collect { v ->
+                [title: v.title ?: v.id ?: "unknown", severity: v.severity]
             }
-        } 
-        else if (reportFile.endsWith(".xml")) {
-            // ZAP hasil XML → cek string High / Critical
-            def zapReport = readFile file: reportFile
-            if (zapReport.contains("High") || zapReport.contains("Critical")) {
-                withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
-                    sh """
-                        curl -H 'Content-Type: application/json' \
-                             -X POST \
-                             -d '{\"content\":\":rotating_light: *CRITICAL vulnerability found in ${toolName}!*\"}' \
-                             $DISCORD_WEBHOOK
-                    """
+        }
+
+        if (toolName == "Snyk SAST") {
+            findings = report.issues?.findAll { i ->
+                i.severity?.toLowerCase() in ["critical", "high"]
+            }?.collect { i ->
+                [title: i.message ?: i.id ?: "unknown", severity: i.severity]
+            }
+        }
+
+        if (toolName == "Trivy") {
+            findings = []
+            report.Results?.each { result ->
+                result.Misconfigurations?.each { m ->
+                    if (m.Severity?.toLowerCase() in ["critical","high"]) {
+                        findings << [title: m.Title ?: m.ID ?: "unknown", severity: m.Severity]
+                    }
                 }
             }
         }
     }
+
+    if (reportFile.endsWith(".xml") && toolName == "OWASP ZAP") {
+        def zapReport = readFile file: reportFile
+        // Simple parse: cari <alertitem> dan riskdesc
+        def xml = new XmlSlurper().parseText(zapReport)
+        xml.depthFirst().findAll { it.name() == "alertitem" }.each { alert ->
+            def risk = alert.riskdesc?.text()?.toLowerCase()
+            if (risk?.contains("high") || risk?.contains("critical")) {
+                findings << [title: alert.alert?.text() ?: "unknown", severity: alert.riskdesc?.text()]
+            }
+        }
+    }
+
+    if (findings && findings.size() > 0) {
+        def summary = findings.take(5).collect { "- ${it.title} (${it.severity})" }.join("\n")
+        def payload = [
+            username: "Jenkins Security Bot",
+            embeds: [[
+                title: "${toolName} — High/Critical Findings",
+                description: "Job: `${env.JOB_NAME}`\nBuild: #${env.BUILD_NUMBER}\n\n${summary}",
+                url: env.BUILD_URL ?: "",
+                color: 16711680
+            ]]
+        ]
+        withCredentials([string(credentialsId: 'DiscordWebhook', variable: 'DISCORD_WEBHOOK')]) {
+            writeFile file: "discord_${toolName.replaceAll('[^A-Za-z0-9]', '_')}.json", text: groovy.json.JsonOutput.toJson(payload)
+            sh "curl -s -H 'Content-Type: application/json' -X POST -d @discord_${toolName.replaceAll('[^A-Za-z0-9]', '_')}.json $DISCORD_WEBHOOK || true"
+        }
+        echo "[NOTIFY] ${toolName}: sent ${findings.size()} findings to Discord"
+    } else {
+        echo "[NOTIFY] ${toolName}: no high/critical findings"
+    }
 }
+
 
 pipeline {
     agent any
@@ -104,7 +130,7 @@ pipeline {
                 always {
                     archiveArtifacts artifacts: 'snyk-scan-report.json'
                     script {
-                        notifyDiscordIfCritical('snyk-scan-report.json', 'Snyk SCA')
+                        notifyDiscordIfHighOrCritical('snyk-scan-report.json', 'Snyk SCA')
                     }
                 }
             }
@@ -127,7 +153,7 @@ pipeline {
             post {
                 always {
                     script {
-                        notifyDiscordIfCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
+                        notifyDiscordIfHighOrCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
                     }
                 }
             }
@@ -156,7 +182,7 @@ pipeline {
             post {
                 always {
                     script {
-                        notifyDiscordIfCritical('snyk-scan-code-report.json', 'Snyk SAST')
+                        notifyDiscordIfHighOrCritical('snyk-scan-code-report.json', 'Snyk SAST')
                     }
                 }
             }
@@ -226,7 +252,7 @@ pipeline {
             post {
                 always {
                     script {
-                        notifyDiscordIfCritical('zap_report.xml', 'OWASP ZAP')
+                        notifyDiscordIfHighOrCritical('zap_report.xml', 'OWASP ZAP')
                     }
                 }
             }
