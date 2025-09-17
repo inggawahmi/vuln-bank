@@ -41,14 +41,15 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     if (reportFile.endsWith(".xml") && toolName == "OWASP ZAP") {
         def zapReport = readFile file: reportFile
         // Simple parse: cari <alertitem> dan riskdesc
-        def xml = new XmlSlurper().parseText(zapReport)
-        xml.depthFirst().findAll { it.name() == "alertitem" }.each { alert ->
-            def risk = alert.riskdesc?.text()?.toLowerCase()
+        def matcher = zapReport =~ /<alertitem>.*?<alert>(.*?)<\/alert>.*?<riskdesc>(.*?)<\/riskdesc>/s
+        while (matcher.find()) {
+            def title = matcher.group(1)
+            def risk = matcher.group(2)?.toLowerCase()
             if (risk?.contains("high") || risk?.contains("critical")) {
-                findings << [title: alert.alert?.text() ?: "unknown", severity: alert.riskdesc?.text()]
+                findings << [title: title, severity: matcher.group(2)]
             }
-        }
     }
+}
 
     if (findings && findings.size() > 0) {
         def summary = findings.take(5).collect { "- ${it.title} (${it.severity})" }.join("\n")
