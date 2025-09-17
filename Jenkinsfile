@@ -41,7 +41,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     if (reportFile.endsWith(".xml") && toolName == "OWASP ZAP") {
         def zapReport = readFile file: reportFile
         // Simple parse: cari <alertitem> dan riskdesc
-        def matcher = zapReport =~ /<alertitem>.*?<alert>(.*?)<\/alert>.*?<riskdesc>(.*?)<\/riskdesc>/s
+        def matcher = zapReport =~ /<alertitem>.*?<alert>(.*?)<\/alert>.*?<riskdesc>(.*?)<\/riskdesc>/
         while (matcher.find()) {
             def title = matcher.group(1)
             def risk = matcher.group(2)?.toLowerCase()
