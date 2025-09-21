@@ -3,9 +3,9 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     if (!fileExists(reportFile)) {
         echo "[NOTIFY] ${toolName}: report ${reportFile} not found"
         return
-    }
+    } //cek apakah ada file report
 
-    def findings = []
+    def findings = [] //simpan file report
 
     if (reportFile.endsWith(".json")) {
         def report = readJSON file: reportFile
@@ -16,7 +16,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
             }?.collect { v ->
                 [title: v.title ?: v.id ?: "unknown", severity: v.severity]
             }
-        }
+        } //ambil field vulnerabilities dari report Snyk SCA, filter severity High/Critical, lalu simpan title & severity.
 
         if (toolName == "Snyk SAST") {
             findings = report.issues?.findAll { i ->
@@ -24,7 +24,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
             }?.collect { i ->
                 [title: i.message ?: i.id ?: "unknown", severity: i.severity]
             }
-        }
+        } //ambil issue dari snyk SAST report
 
         if (toolName == "Trivy") {
             findings = []
@@ -36,11 +36,12 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
                 }
             }
         }
-    }
+    } //Ambil Misconfigurations dari hasil Trivy scan Dockerfile, filter severity High/Critical.
 
     if (reportFile.endsWith(".xml") && toolName == "OWASP ZAP") {
         def zapReport = readFile file: reportFile
         // Simple parse: cari <alertitem> dan riskdesc
+        // Kalau riskdesc mengandung High/Critical masuk ke findings
         def matcher = zapReport =~ /(?s)<alertitem>.*?<alert>(.*?)<\/alert>.*?<riskdesc>(.*?)<\/riskdesc>/
     while (matcher.find()) {
         def title = matcher.group(1)?.trim()
@@ -49,10 +50,10 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
             findings << [title: title, severity: matcher.group(2)]
         }
     }
-}
+} //
 
     if (findings && findings.size() > 0) {
-        def summary = findings.take(5).collect { "- ${it.title} (${it.severity})" }.join("\n")
+        def summary = findings.collect { "- ${it.title} (${it.severity})" }.join("\n")
         def payload = [
             username: "Jenkins Security Bot",
             embeds: [[
@@ -70,8 +71,8 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     } else {
         echo "[NOTIFY] ${toolName}: no high/critical findings"
     }
-}
-
+} // Kalau ada temuan High/Critical, bikin summary max 5 temuan, bungkus JSON payload, kirim ke Discord Webhook.
+  // Kalau tidak ada, echo bahwa tidak ada temuan.
 
 pipeline {
     agent any
@@ -88,27 +89,27 @@ pipeline {
                     image 'trufflesecurity/trufflehog:latest'
                     args '--entrypoint='
                 }
-            }
+            } // jalankan image menggunakan trufflehog
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
-                }
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
+                } // scan seluruh repo, exclude path tertentu, simpan hasil JSON
                 sh 'cat trufflehog-scan-result.json'
                 archiveArtifacts artifacts: 'trufflehog-scan-result.json'
-            }
+            } // print hasil scan + simpan sebagai artifact
         }
 
         stage('Checkout Source dari Github') {
             steps {
                 checkout scm
             }
-        }
+        } // clone/checkout source code dari GitHub (SCM).
 
         stage('Build') {
             steps {
                 sh 'docker-compose build'
             }
-        }
+        } // build aplikasi menggunakan docker-compose.
 
         stage('SCA Scan with Snyk') {
             agent {
@@ -116,7 +117,7 @@ pipeline {
                     image 'inggawahmi/snyk-python:3.9'
                     args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint='
                 }
-            }
+            } // jalankan scan SCA snyk dengan image custom yang sudah dibuat terlebih dahulu
             steps {
                 withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
                     sh '''
@@ -126,7 +127,7 @@ pipeline {
                         exit 0
                     '''
                 }
-            }
+            } // autentikasi ke Snyk, jalankan SCA scan di dependencies (requirements.txt).
             post {
                 always {
                     archiveArtifacts artifacts: 'snyk-scan-report.json'
@@ -134,7 +135,7 @@ pipeline {
                         notifyDiscordIfHighOrCritical('snyk-scan-report.json', 'Snyk SCA')
                     }
                 }
-            }
+            } // hasil report JSON diarsipkan + dikirim ke Discord kalau ada temuan.
         }
         
         stage('SCA Trivy scan Dockerfile Misconfiguration') {
@@ -148,16 +149,16 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh 'mkdir -p .json && trivy config Dockerfile --exit-code=1 --format json > .json/trivy-scan-dockerfile-report.json'
                 }
-                sh 'cat .json/trivy-scan-dockerfile-report.json'
-                archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
-            }
+            } // scan Dockerfile dengan Trivy, cari misconfiguration.
             post {
                 always {
+                    sh 'cat .json/trivy-scan-dockerfile-report.json'
+                    archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
                     script {
                         notifyDiscordIfHighOrCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
                     }
                 }
-            }
+            } // hasil JSON ditampilkan, disimpan artifact, dikirim ke Discord.
         }
 
         stage('SAST Scan with Snyk') {
@@ -176,17 +177,17 @@ pipeline {
                         snyk auth "$SNYK_CREDS_PSW"
                         snyk code test --json > snyk-scan-code-report.json
                     '''
-                }
-                sh 'cat snyk-scan-code-report.json'
-                archiveArtifacts artifacts: 'snyk-scan-code-report.json'
-            }
+                } // jalankan Snyk Code Analysis (SAST).
+            } // hasil JSON ditampilkan, disimpan di artifact.
             post {
                 always {
+                sh 'cat snyk-scan-code-report.json'
+                archiveArtifacts artifacts: 'snyk-scan-code-report.json'
                     script {
                         notifyDiscordIfHighOrCritical('snyk-scan-code-report.json', 'Snyk SAST')
                     }
                 }
-            }
+            } // kirim report.json ke discord.
         }
 
         stage('Build Docker Image and Push to Docker Registry') {
@@ -201,7 +202,7 @@ pipeline {
                 sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
                 sh 'docker push inggawahmi/vuln-bank:0.1'
             }
-        }
+        } // build docker, login ke dockerhub, push image baru.
 
         stage('Deploy Docker Image') {
             agent {
@@ -215,17 +216,17 @@ pipeline {
                     sshUserPrivateKey(credentialsId: "DeploymentSSHKey", keyFileVariable: 'keyfile'),
                     usernamePassword(credentialsId: "DockerLogin", usernameVariable: 'tmpUser', passwordVariable: 'tmpPass')
                 ]) {
-                    // 1. Login ke Docker Hub
+                    // 1. Login ke Docker Hub.
                     sh '''
                         ssh -i ${keyfile} -o StrictHostKeyChecking=no deploymentserver@192.168.1.11 \
                         "echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
                     '''
-                    // 2. Pull image terbaru dari Docker Hub
+                    // 2. Pull image terbaru dari Docker Hub.
                     sh '''
                         ssh -i ${keyfile} -o StrictHostKeyChecking=no deploymentserver@192.168.1.11 \
                         "docker pull inggawahmi/vuln-bank:0.1"
                     '''
-                    // 3. Jalankan dengan docker-compose
+                    // 3. Jalankan dengan docker-compose.
                     sh '''
                         ssh -i ${keyfile} -o StrictHostKeyChecking=no deploymentserver@192.168.1.11 \
                         "docker compose -f /home/deploymentserver/vuln-bank/docker-compose.yml up -d"
@@ -246,19 +247,19 @@ pipeline {
                                             -r zapbaseline.html \
                                             -x zap_report.xml
                     '''
-                }
+                } // jalankan dynamic scan ke aplikasi yang sudah jalan di server target.
                 sh 'cp zapbaseline.html ./zapbaseline.html'
                 sh 'cp zap_report.xml ./zap_report.xml'
                 archiveArtifacts artifacts: 'zapbaseline.html'
                 archiveArtifacts artifacts: 'zap_report.xml'
-            }
+            } // simpan hasil dalam bentuk html dan xml.
             post {
                 always {
                     script {
                         notifyDiscordIfHighOrCritical('zap_report.xml', 'OWASP ZAP')
                     }
                 }
-            }
+            } // kalau ada temuan High/Critical kirim notifikasi ke Discord.
         }
     }
 }
