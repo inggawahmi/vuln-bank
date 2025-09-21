@@ -20,9 +20,9 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
 
         if (toolName == "Snyk SAST") {
             findings = report.issues?.findAll { i ->
-                i.severity?.toLowerCase() in ["critical", "high"]
+                i.level?.toLowerCase() in ["error", "warning"]
             }?.collect { i ->
-                [title: i.message ?: i.id ?: "unknown", severity: i.severity]
+                [title: i.text ?: i.id ?: "unknown", level: i.level]
             }
         } //ambil issue dari snyk SAST report
 
