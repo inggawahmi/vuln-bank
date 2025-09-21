@@ -154,11 +154,17 @@ pipeline {
                 always {
                     sh 'cat .json/trivy-scan-dockerfile-report.json'
                     archiveArtifacts artifacts: '.json/trivy-scan-dockerfile-report.json'
-                    script {
-                        notifyDiscordIfHighOrCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
-                    }
                 }
-            } // hasil JSON ditampilkan, disimpan artifact, dikirim ke Discord.
+            } // hasil JSON ditampilkan, disimpan artifact.
+        }
+
+        stage('Notify Discord for Trivy') {
+            agent any  // <- ini jalan di host Jenkins, bukan container Trivy
+            steps {
+                script {
+                    notifyDiscordIfHighOrCritical('.json/trivy-scan-dockerfile-report.json', 'Trivy')
+                }
+            }
         }
 
         stage('SAST Scan with Snyk') {
