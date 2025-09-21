@@ -19,10 +19,34 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
         } //ambil field vulnerabilities dari report Snyk SCA, filter severity High/Critical, lalu simpan title & severity.
 
         if (toolName == "Snyk SAST") {
-            findings = report.issues?.findAll { i ->
-                i.level?.toLowerCase() in ["error", "warning"]
-            }?.collect { i ->
-                [title: i.text ?: i.id ?: "unknown", level: i.level]
+            // === SARIF (Snyk Code) biasanya pakai level: warning/error ===
+            if (report?.runs) {
+                report.runs.each { run ->
+                    def rules = run.tool.driver.rules.collectEntries { [(it.id): it] }
+                    run.results.each { result ->
+                        def ruleId = result.ruleId
+                        def rule = rules[ruleId]
+                        def level = result.level ?: rule?.defaultConfiguration?.level ?: "note"
+                        def severity = [
+                            "note"   : "Low",
+                            "warning": "High",   // mapping ke High supaya muncul di Discord
+                            "error"  : "Critical"
+                        ][level] ?: "Low"
+
+                        if (severity in ["High", "Critical"]) {
+                            findings << [
+                                title: rule?.name ?: ruleId ?: "unknown",
+                                severity: severity
+                            ]
+                        }
+                    }
+                }
+            } else {
+                findings = report.issues?.findAll { i ->
+                    i.level?.toLowerCase() in ["error", "warning"]
+                }?.collect { i ->
+                    [title: i.text ?: i.id ?: "unknown", severity: i.level]
+                }
             }
         } //ambil issue dari snyk SAST report
 
