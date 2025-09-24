@@ -1,9 +1,9 @@
-// === Fungsi global buat notifikasi Discord ===
+// Fungsi global buat notifikasi Discord
 def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     if (!fileExists(reportFile)) {
         echo "[NOTIFY] ${toolName}: report ${reportFile} not found"
         return
-    } //cek apakah ada file report
+    } // cek apakah ada file report
 
     def findings = [] //simpan file report
 
@@ -16,10 +16,22 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
             }?.collect { v ->
                 [title: v.title ?: v.id ?: "unknown", severity: v.severity]
             }
-        } //ambil field vulnerabilities dari report Snyk SCA, filter severity High/Critical, lalu simpan title & severity.
+        } // ambil field vulnerabilities dari report Snyk SCA, filter severity High/Critical, lalu simpan title & severity.
 
-        if (toolName == "Snyk SAST") {
-            // === SARIF (Snyk Code) biasanya pakai level: warning/error ===
+        if (toolName == "Trivy") {
+            findings = []
+            report.Results?.each { result ->
+                result.Misconfigurations?.each { m ->
+                    if (m.Severity?.toLowerCase() in ["critical","high"]) {
+                        findings << [title: m.Title ?: m.ID ?: "unknown", severity: m.Severity]
+                    }
+                }
+            }
+        }
+    } // Ambil Misconfigurations dari hasil Trivy scan Dockerfile, filter severity High/Critical.
+
+    if (toolName == "Snyk SAST") {
+            // SARIF (Snyk Code) biasanya pakai level: warning/error 
             if (report?.runs) {
                 report.runs.each { run ->
                     def rules = run.tool.driver.rules.collectEntries { [(it.id): it] }
@@ -48,19 +60,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
                     [title: i.text ?: i.id ?: "unknown", severity: i.level]
                 }
             }
-        } //ambil issue dari snyk SAST report
-
-        if (toolName == "Trivy") {
-            findings = []
-            report.Results?.each { result ->
-                result.Misconfigurations?.each { m ->
-                    if (m.Severity?.toLowerCase() in ["critical","high"]) {
-                        findings << [title: m.Title ?: m.ID ?: "unknown", severity: m.Severity]
-                    }
-                }
-            }
-        }
-    } //Ambil Misconfigurations dari hasil Trivy scan Dockerfile, filter severity High/Critical.
+        } // ambil issue dari snyk SAST report
 
     if (reportFile.endsWith(".xml") && toolName == "OWASP ZAP") {
         def zapReport = readFile file: reportFile
@@ -74,7 +74,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
             findings << [title: title, severity: matcher.group(2)]
         }
     }
-} //
+} 
 
     if (findings && findings.size() > 0) {
         def summary = findings.collect { "- ${it.title} (${it.severity})" }.join("\n")
@@ -95,7 +95,7 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     } else {
         echo "[NOTIFY] ${toolName}: no high/critical findings"
     }
-} // Kalau ada temuan High/Critical, bikin summary max 5 temuan, bungkus JSON payload, kirim ke Discord Webhook.
+} // Kalau ada temuan High/Critical, bikin summary, bungkus JSON payload, kirim ke Discord Webhook.
   // Kalau tidak ada, echo bahwa tidak ada temuan.
 
 pipeline {
@@ -116,7 +116,7 @@ pipeline {
             } // jalankan image menggunakan trufflehog
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
                 } // scan seluruh repo, exclude path tertentu, simpan hasil JSON
                 sh 'cat trufflehog-scan-result.json'
                 archiveArtifacts artifacts: 'trufflehog-scan-result.json'
