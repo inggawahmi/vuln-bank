@@ -6,9 +6,10 @@ def notifyDiscordIfHighOrCritical(reportFile, toolName) {
     } // cek apakah ada file report
 
     def findings = [] //simpan file report
+    def report = null
 
     if (reportFile.endsWith(".json")) {
-        def report = readJSON file: reportFile
+        report = readJSON file: reportFile
 
         if (toolName == "Snyk SCA") {
             findings = report.vulnerabilities?.findAll { v ->
@@ -116,7 +117,7 @@ pipeline {
             } // jalankan image menggunakan trufflehog
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths.txt --fail --json --no-update > trufflehog-scan-result.json'
+                    sh 'trufflehog filesystem . --exclude-paths trufflehog-excluded-paths --fail --json --no-update > trufflehog-scan-result.json'
                 } // scan seluruh repo, exclude path tertentu, simpan hasil JSON
                 sh 'cat trufflehog-scan-result.json'
                 archiveArtifacts artifacts: 'trufflehog-scan-result.json'
