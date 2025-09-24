@@ -1,19 +1,7 @@
-static/**
-templates/**
-
-# python venv / build artifacts
-venv/**
-.venv/**
-__pycache__/**
-build/**
-dist/**
-
-# git & vendor
-.git/**
-vendor/**
-node_modules/**
-
-# large data / db dumps
-*.sql
-*.sqlite
-data/**
+node_modules/
+venv/
+env/
+__pycache__/
+dist/
+build/
+static/
