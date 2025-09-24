@@ -144,12 +144,11 @@ pipeline {
                 }
             } // jalankan scan SCA snyk dengan image custom yang sudah dibuat terlebih dahulu
             steps {
-                withCredentials([usernamePassword(credentialsId: 'SnykToken', usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
+                withCredentials([usernamePassword(credentialsId: 'SnykToken',
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'), usernameVariable: 'USER', passwordVariable: 'SNYK_TOKEN')]) {
                     sh '''
                         snyk auth $SNYK_TOKEN
-                        snyk test --file=requirements.txt --json > snyk-scan-report.json || EXIT_CODE=$?
-                        echo "Snyk finished with exit code $EXIT_CODE"
-                        exit 0
+                        snyk test --file=requirements.txt --json > snyk-scan-report.json
                     '''
                 }
             } // autentikasi ke Snyk, jalankan SCA scan di dependencies (requirements.txt).
